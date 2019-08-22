@@ -1,0 +1,4 @@
+GET http://localhost:4000/graphql?query={article(id: 5000000139){name}}
+
+
+###

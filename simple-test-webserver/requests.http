@@ -1,0 +1,45 @@
+GET http://localhost:8001/?id=123&location[]=1&location[]=2 HTTP/1.1
+content-type: application/json
+
+{
+    "per_page": 2,
+    "page": 10,
+    "location": {
+        "in": [
+            1, 
+            2, 
+            3
+        ]
+    },
+    "where": {
+        "name": {
+            "contains": "coca"
+        }
+    }
+}
+
+###
+
+POST http://localhost:8001/?id=123&location[]=1&location[]=2 HTTP/1.1
+content-type: application/json
+
+{
+    "per_page": 2,
+    "page": 10,
+    "location": {
+        "in": [
+            1, 
+            2, 
+            3
+        ]
+    },
+    "where": {
+        "name": {
+            "contains": "coca"
+        }
+    }
+}
+
+###
+
+GET http://localhost:8001/?location=1&location=2&where[name][contains]=coca&where[name][contains]=cola
