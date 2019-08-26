@@ -21,12 +21,12 @@ class TcpPrinter {
         const t = timeout > 0 ? parseInt(timeout) : 5000;
         const connection = net.createConnection(port, host);
 
-        const encoding = codepage || this.codepage || 'cp866';
         connection.setTimeout(t);
 
         connection.on('connect', () => {
             console.log(`- Connected to printer ${host}:${port}`);
             console.log(`-- Sending data.`);
+            console.log('--- Data:', data);
 
             connection.write(data, callback);
             connection.destroy();

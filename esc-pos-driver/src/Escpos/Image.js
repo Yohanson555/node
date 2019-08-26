@@ -1,7 +1,8 @@
 'use strict';
-const _ = require('./Comands');
+const _ = require('./Commands');
 const getPixels = require('get-pixels');
 const ImageJs = require('image-js');
+var Jimp = require('jimp');
 const { MutableBuffer } = require('mutable-buffer');
 const { URL } = require('url');
 
@@ -29,9 +30,12 @@ class Image {
 
         const image = await ImageJs.Image.load(source);
 
+        console.log("Loaded image: ");
+        console.log(image);
+
         const grey = image
             .resize({
-                width: 100
+                width: 150
             })
             .grey({
                 algorithm: 'lightness'
@@ -44,7 +48,7 @@ class Image {
             algorithm: 'li'
         });
 
-        console.log(mask);
+        //console.log(mask);
 
         const maskBuffer = mask.toBuffer({
             format: 'jpg'
@@ -52,8 +56,8 @@ class Image {
         const buf = Buffer.from(maskBuffer);
 
         getPixels(buf, 'image/jpg', (err, pixels) => {
-            console.log('here is the pixels!');
-            console.log(pixels);
+            //console.log('here is the pixels!');
+            //console.log(pixels);
 
             if (err) throw new Error(err);
             this.prepareData(pixels);
@@ -90,6 +94,90 @@ class Image {
     });*/
     }
 
+    async load2() {
+        const { source: src } = this;
+
+        if (!src) {
+            throw new Error("Provide image path");
+        } else {
+            try {
+                return Jimp.read(src).then(image => {
+                    console.log(image);
+                    image.resize(50, 50);
+
+                    console.log(image);
+                    const pixels = this.dithering(1, image.bitmap.data, image.bitmap.width, image.bitmap.height);
+                    this.prepareData({
+                        data: pixels,
+                        width: image.bitmap.width,
+                        height: image.bitmap.height,
+                        colors: 4
+                    });
+                }, err => {
+                    if (err.code == "ENOENT") {
+
+                        throw new Error("Mentioned file does not exist");
+                    } else {
+                        throw new Error("Use correct filname, and make sure file used is image");
+                    }
+                });
+            } catch (error) {
+                throw new Error("Use correct filname, and make sure file used is image");
+            }
+        }
+    }
+
+    dithering(errorMultiplier = 1, data, w, h) {
+
+        var filter = [
+            [0, 0, 0, 7 / 48, 5 / 48],
+            [3 / 48, 5 / 48, 7 / 48, 5 / 48, 3 / 48],
+            [1 / 48, 3 / 48, 5 / 48, 3 / 48, 1 / 48]
+        ];
+    
+        var error = [];
+        var x, y, xx, yy, r, g, b;
+    
+        for (y = 0; y < h; y++)error.push(new Float32Array(w));
+    
+        for (y = 0; y < h; y++) {
+    
+            for (x = 0; x < w; x++) {
+                var id = ((y * w) + x) * 4;
+    
+                r = data[id];
+                g = data[id + 1];
+                b = data[id + 2];
+    
+                var avg = (r + g + b) / 3;
+                avg -= error[y][x] * errorMultiplier;
+    
+                var e = 0;
+                if (avg < 128) {
+                    e = -avg;
+                    avg = 0;
+                }
+                else {
+                    e = 255 - avg;
+                    avg = 255;
+                }
+    
+                data[id] = data[id + 1] = data[id + 2] = avg;
+                data[id + 3] = 255;
+    
+                for (yy = 0; yy < 3; yy++) {
+                    for (xx = -2; xx <= 2; xx++) {
+                        if (y + yy < 0 || h <= y + yy
+                            || x + xx < 0 || w <= x + xx) continue;
+    
+                        error[y + yy][x + xx] += e * filter[yy][xx + 2];
+                    }
+                }
+            }
+        }
+        return data;
+    }
+
     rgb(pixel) {
         return {
             r: pixel[0],
@@ -109,9 +197,9 @@ class Image {
         console.log('this pixels', this.pixels.shape);
 
         this.size = {
-            width: this.pixels.shape[0],
-            height: this.pixels.shape[1],
-            colors: this.pixels.shape[2],
+            width: this.pixels.width,
+            height: this.pixels.height,
+            colors: this.pixels.colors,
         }
 
         for (var i = 0; i < this.pixels.data.length; i += this.size.colors) {
@@ -130,69 +218,15 @@ class Image {
             if (pixel.a == 0) return 0;
 
             var white = pixel.r > 200 && pixel.g > 200 && pixel.b > 200;
+
+            //return pixel.avg;
+
             return white ? 0 : 1;
         });
     }
 
-    render(density) {
-        density = 's8';
-        var n = !!~['d8', 's8'].indexOf(density) ? 1 : 3;
-
-        console.log('density is: ', density);
-
-        var header = _.BITMAP_FORMAT['BITMAP_' + density.toUpperCase()];
-        var bitmap = this.toBitmap(n * 8);
-
-        console.log('bitmap');
-        console.log(bitmap);
-
-        let buffer = new MutableBuffer();
-
-        //this.lineSpace(0); // set line spacing to 0
-
-        buffer.write(_.LINE_SPACING.LS_SET);
-        buffer.writeUInt8(0);
-
-        bitmap.data.forEach((line) => {
-            //console.log('line is', line);
-            buffer.write(header);
-            buffer.writeUInt16LE(line.length / n);
-            buffer.write(line);
-            buffer.write(_.EOL);
-        });
-
-        buffer.write(_.LINE_SPACING.LS_DEFAULT);
-
-        console.log('BUFFER:');
-        console.log(buffer);
-
-        const result = buffer.flush();
-
-        return result;
-    };
-
-    render2(mode = null) {
-        mode = mode || 'normal';
-        if (mode === 'dhdw' ||
-            mode === 'dwh' ||
-            mode === 'dhw') mode = 'dwdh';
-
-        var raster = this.toRaster();
-        var header = _.GSV0_FORMAT['GSV0_' + mode.toUpperCase()];
-
-        console.log(raster);
-
-        let buffer = new MutableBuffer();
-
-        buffer.write(header);
-        buffer.writeUInt16LE(raster.width);
-        buffer.writeUInt16LE(raster.height);
-        buffer.write(raster.data);
-
-        return buffer.flush();
-    };
-
     toBitmap(density) {
+        density = 8;
         density = density || 24;
 
         var ld, result = [];

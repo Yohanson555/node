@@ -61,7 +61,7 @@ var _ = {
    * @type {Object}
    */
   _.MARGINS = {
-    BOTTOM: '\x1b\x4f', // Fix bottom size
+    BOTTOM: '\x1b\x64', // Fix bottom size
     LEFT: '\x1b\x6c', // Fix left size
     RIGHT: '\x1b\x51', // Fix right size
   };
@@ -71,6 +71,7 @@ var _ = {
    * @type {Object}
    */
   _.PAPER = {
+    PAPER_CUT: '\x1b\x6d',
     PAPER_FULL_CUT: '\x1d\x56\x00', // Full cut paper
     PAPER_PART_CUT: '\x1d\x56\x01', // Partial cut paper
     PAPER_CUT_A: '\x1d\x56\x41', // Partial cut paper
@@ -88,12 +89,7 @@ var _ = {
     TXT_2WIDTH: '\x1b\x21\x20', // Double width text
     TXT_4SQUARE: '\x1b\x21\x30', // Double width & height text
   
-    TXT_CUSTOM_SIZE: function (width, height) { // other sizes
-      var widthDec = (width - 1) * 16;
-      var heightDec = height - 1;
-      var sizeDec = widthDec + heightDec;
-      return '\x1d\x21' + String.fromCharCode(sizeDec);
-    },
+    TXT_CUSTOM_SIZE: (sizeDec) => '\x1d\x21' + String.fromCharCode(sizeDec),  // other sizes
   
     TXT_HEIGHT: {
       1: '\x00',

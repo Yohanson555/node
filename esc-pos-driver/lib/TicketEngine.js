@@ -22,7 +22,9 @@ class TicketEngine {
     async run(data, template) {
         const { driver } = this;
 
-        return driver.build(data, template, Handlebars);
+        await driver.build(data, template, Handlebars);
+
+        return driver.flush();
     }
 }
 

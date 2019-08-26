@@ -6,9 +6,27 @@ const imgTemplate = `
     <br>
     <br>
     <center>
-    <img source="D:/REPOS/4.NODE_PROJECTS/esc-pos-driver/gru.jpg">
+    <img source="D:/REPOS/4.NODE_PROJECTS/esc-pos-driver/big.png">
     </center>
     <br><br><br><br><cut>
+`;
+
+const smplTemplate = `
+<br>
+<br>
+<br>
+<center>
+line 1123123123123
+</center>
+<br>
+line 2
+<br>
+<br>
+<br>
+<br>
+<mb value="5">
+---
+<cut>
 `;
 
 const billTemplate = `<br />
@@ -154,5 +172,6 @@ module.exports = {
     billTemplate,
     complexTemplate,
     orderTemplate,
-    imgTemplate
+    imgTemplate,
+    smplTemplate
 }
