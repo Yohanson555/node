@@ -1,9 +1,8 @@
-const Image = require('./src/Escpos/Image');
+let threshold = 127;
+let luminance = (1 * 0.3 + 1 * 0.59 + 1 * 0.11) | 0;
 
+let a = Number(luminance < threshold);
 
-const src = 'js.png';
-
-const image = new Image(src);
-image.load().catch(e => {
-    console.error(e);
-});
+console.log(threshold);
+console.log(luminance);
+console.log(a);

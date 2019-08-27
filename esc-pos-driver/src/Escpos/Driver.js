@@ -39,6 +39,8 @@ class EscPosDriver {
 		this.currentStyle = 'left';
 
 		this.encoding = 'cp866';
+
+		this.model = null; //qsprinter
 	}
 
 	compileTemplate(data, tpl, templater) {
@@ -58,7 +60,7 @@ class EscPosDriver {
 		const code = [];
 
 		let fz = this.options.fontSize || 1;
-		
+
 		this.setFontSize(fz, fz);
 		this.setAlignCode(this.currentStyle);
 		this.setFontCode(this.currentFontType);
@@ -128,7 +130,6 @@ class EscPosDriver {
 		let qr = this.getNodeAttr(node, 'data');
 
 		if (qr !== '') {
-
 			const dots = this.getQRSize(node); // The dot size of the QR code
 
 			if (qr.length >= 256) {
@@ -150,75 +151,6 @@ class EscPosDriver {
 		return this;
 	}
 
-	getQRSize(node = null) {
-
-		const code = this.getNodeAttr(node, 'data');
-		const size = this.getNodeAttr(node, 'size');
-		const version = this.getNodeAttr(node, 'version');
-		const level = this.getNodeAttr(node, 'level');
-
-		if (this._model !== 'qsprinter') {
-			this.buffer.write(_.CODE2D_FORMAT.TYPE_QR);
-			this.buffer.write(_.CODE2D_FORMAT.CODE2D);
-			this.buffer.writeUInt8(version || 3);
-			this.buffer.write(_.CODE2D_FORMAT[
-				'QR_LEVEL_' + (level || 'L').toUpperCase()
-			]);
-			this.buffer.writeUInt8(size || 6);
-			this.buffer.writeUInt16LE(code.length);
-			this.buffer.write(code);
-		} else {
-			const dataRaw = iconv.encode(code, 'utf8');
-
-			if (dataRaw.length < 1 && dataRaw.length > 2710) {
-				throw new Error('Invalid code length in byte. Must be between 1 and 2710');
-			}
-
-			// Set pixel size
-			if (!size || (size && typeof size !== 'number'))
-				size = _.MODEL.QSPRINTER.CODE2D_FORMAT.PIXEL_SIZE.DEFAULT;
-			else if (size && size < _.MODEL.QSPRINTER.CODE2D_FORMAT.PIXEL_SIZE.MIN)
-				size = _.MODEL.QSPRINTER.CODE2D_FORMAT.PIXEL_SIZE.MIN;
-			else if (size && size > _.MODEL.QSPRINTER.CODE2D_FORMAT.PIXEL_SIZE.MAX)
-				size = _.MODEL.QSPRINTER.CODE2D_FORMAT.PIXEL_SIZE.MAX;
-
-			this.buffer.write(_.MODEL.QSPRINTER.CODE2D_FORMAT.PIXEL_SIZE.CMD);
-			this.buffer.writeUInt8(size);
-
-			// Set version
-			if (!version || (version && typeof version !== 'number'))
-				version = _.MODEL.QSPRINTER.CODE2D_FORMAT.VERSION.DEFAULT;
-			else if (version && version < _.MODEL.QSPRINTER.CODE2D_FORMAT.VERSION.MIN)
-				version = _.MODEL.QSPRINTER.CODE2D_FORMAT.VERSION.MIN;
-			else if (version && version > _.MODEL.QSPRINTER.CODE2D_FORMAT.VERSION.MAX)
-				version = _.MODEL.QSPRINTER.CODE2D_FORMAT.VERSION.MAX;
-
-			this.buffer.write(_.MODEL.QSPRINTER.CODE2D_FORMAT.VERSION.CMD);
-			this.buffer.writeUInt8(version);
-
-			// Set level
-			if (!level || (level && typeof level !== 'string'))
-				level = _.CODE2D_FORMAT.QR_LEVEL_L;
-				
-			this.buffer.write(_.MODEL.QSPRINTER.CODE2D_FORMAT.LEVEL.CMD);
-			this.buffer.write(_.MODEL.QSPRINTER.CODE2D_FORMAT.LEVEL.OPTIONS[level.toUpperCase()]);
-
-			// Transfer data(code) to buffer
-			this.buffer.write(_.MODEL.QSPRINTER.CODE2D_FORMAT.SAVEBUF.CMD_P1);
-			this.buffer.writeUInt16LE(dataRaw.length + _.MODEL.QSPRINTER.CODE2D_FORMAT.LEN_OFFSET);
-			this.buffer.write(_.MODEL.QSPRINTER.CODE2D_FORMAT.SAVEBUF.CMD_P2);
-			this.buffer.write(dataRaw);
-
-			// Print from buffer
-			this.buffer.write(_.MODEL.QSPRINTER.CODE2D_FORMAT.PRINTBUF.CMD_P1);
-			this.buffer.writeUInt16LE(dataRaw.length + _.MODEL.QSPRINTER.CODE2D_FORMAT.LEN_OFFSET);
-			this.buffer.write(_.MODEL.QSPRINTER.CODE2D_FORMAT.PRINTBUF.CMD_P2);
-		}
-
-		return this;
-	}
-
-	/*
 	getQRSize(node = null, s = null) {
 		let size = s;
 
@@ -242,27 +174,80 @@ class EscPosDriver {
 			case 8: return '\x08';
 			default: return '\x01';
 		}
-	}*/
+	}
 
 	getBARCode(node) {
-		const data = this.getNodeAttr(node, 'data');
+		//var width, height, position, font, includeParity;
 
-		if (data) {
-			const width = this.getBarCodeWidth(node);
-			const height = this.getBarCodeHeight(node);
-			const type = this.getBarCodeType(node);
-			const hri = this.getBarHriPosition(node);
+		var code = this.getNodeAttr(node, 'data');
 
+		var width = this.getBarCodeWidth(node);
+		var height = this.getBarCodeHeight(node);
 
-			const barcode = `${hri}\x1d\x68${String.fromCharCode(height)}\x1d\x77${String.fromCharCode(width)}\x1d\x6b${type}${String.fromCharCode(data.length)}${data}`;
+		var position = this.getBarCodePosition(node);
 
-			this.buffer.write(barcode);
+		var type = this.getBarCodeType(node); //'EAN13';
+		var font = this.getBarCodeFont(node); //'A';
+
+		var includeParity = true;
+
+		type = type || 'EAN13'; // default type is EAN13, may a good choice ?
+		var convertCode = String(code), parityBit = '', codeLength = '';
+
+		if (typeof type === 'undefined' || type === null)
+			throw new TypeError('barcode type is required');
+
+		if (type === 'EAN13' && convertCode.length !== 12)
+			throw new Error('EAN13 Barcode type requires code length 12');
+
+		if (type === 'EAN8' && convertCode.length !== 7)
+			throw new Error('EAN8 Barcode type requires code length 7');
+
+		if (this._model === 'qsprinter')
+			this.buffer.write(_.MODEL.QSPRINTER.BARCODE_MODE.ON);
+
+		if (this._model === 'qsprinter') {
+			// qsprinter has no BARCODE_WIDTH command (as of v7.5)
+		} else if (width >= 2 || width <= 6) {
+			this.buffer.write(_.BARCODE_FORMAT.BARCODE_WIDTH[width]);
+		} else {
+			this.buffer.write(_.BARCODE_FORMAT.BARCODE_WIDTH_DEFAULT);
+		}
+
+		if (height >= 1 || height <= 255) {
+			this.buffer.write(_.BARCODE_FORMAT.BARCODE_HEIGHT(height));
+		} else {
+			if (this._model === 'qsprinter') {
+				this.buffer.write(_.MODEL.QSPRINTER.BARCODE_HEIGHT_DEFAULT);
+			} else {
+				this.buffer.write(_.BARCODE_FORMAT.BARCODE_HEIGHT_DEFAULT);
+			}
+		}
+
+		if (this._model !== 'qsprinter')
+			this.buffer.write(_.BARCODE_FORMAT['BARCODE_FONT_' + (font || 'A').toUpperCase()]);
+
+		this.buffer.write(position);
+
+		this.buffer.write(_.BARCODE_FORMAT['BARCODE_' + ((type || 'EAN13').replace('-', '_').toUpperCase())]);
+
+		if (type === 'EAN13' || type === 'EAN8') {
+			parityBit = this.getParityBit(code);
+		}
+
+		if (type == 'CODE128' || type == 'CODE93') {
+			codeLength = this.codeLength(code);
+		}
+
+		this.buffer.write(codeLength + code + (includeParity ? parityBit : '') + '\x00'); // Allow to skip the parity byte
+		if (this._model === 'qsprinter') {
+			this.buffer.write(_.MODEL.QSPRINTER.BARCODE_MODE.OFF);
 		}
 
 		return this;
 	}
 
-	getBarHriPosition(node = null) {
+	getBarCodePosition(node = null) {
 		let hri = null;
 
 		if (node) {
@@ -276,10 +261,10 @@ class EscPosDriver {
 		}
 
 		switch (hri) {
-			case 1: return '\x1d\x48\x01';
-			case 2: return '\x1d\x48\x02';
-			case 3: return '\x1d\x48\x03';
-			default: return '\x1d\x48\x00';
+			case 1: return _.BARCODE_FORMAT.BARCODE_TXT_ABV; // HRI barcode chars above
+			case 2: return _.BARCODE_FORMAT.BARCODE_TXT_BLW; // HRI barcode chars below
+			case 3: return _.BARCODE_FORMAT.BARCODE_TXT_BTH; // HRI barcode chars both above and below
+			default: return _.BARCODE_FORMAT.BARCODE_TXT_OFF; // HRI barcode chars OFF
 		}
 	}
 
@@ -325,61 +310,100 @@ class EscPosDriver {
 		}
 
 		switch (type) {
-			case 1: return '\x42';
-			case 2: return '\x43';
-			case 3: return '\x44';
-			case 4: return '\x45';
-			case 5: return '\x46';
-			case 6: return '\x47';
-			case 7: return '\x48';
-			case 8: return '\x49';
-			default: return '\x41';
+			case 1: return 'UPC_A';
+			case 2: return 'UPC_E';
+			case 3: return 'EAN13';
+			case 4: return 'EAN8';
+			case 5: return 'CODE39';
+			case 6: return 'ITF';
+			case 7: return 'NW7';
+			case 8: return 'CODE93';
+			case 9: return 'CODE128';
+			default: return 'EAN13';
 		}
 	}
 
-	async getImage(node, density) {
+	getBarCodeFont(node) {
+		let font = "A";
+
+		if (node) {
+			font = String(this.getNodeAttr(node, 'font'));
+
+			if (font.toUpperCase() !== 'B')
+				font = 'A';
+		}
+
+		return font.toUpperCase();
+	}
+
+	async getImage(node) {
 		const source = this.getNodeAttr(node, 'source') || '-';
+		const density = this.getNodeAttr(node, 'density') || 's8';
 
 		if (source && typeof source === 'string') {
-			const image = new Image(source);
+			const image = new Image(source, true);
 
-			await image.load2();
+			await image.load();
 
-			this.renderImage(image, density)
+			this.renderImage(image, 'd24')
 		}
 
 		return this;
 	}
 
 	renderImage(image, density) {
-		density = 's8';
-		var n = !!~['d8', 's8'].indexOf(density) ? 1 : 3;
+		const imageBits = image.data;
 
-		var header = _.BITMAP_FORMAT['BITMAP_' + density.toUpperCase()];
-		var bitmap = image.toBitmap(n * 8);
+		// COMMANDS
+		var selectBitImageModeCommand = `${_.BITMAP_FORMAT.BITMAP_D24}`;
 
-		this.lineSpace(0);
+		var setLineSpacing24Dots = `${_.LINE_SPACING.LS_SET}\x18`;
+		var setLineSpacing30Dots = `${_.LINE_SPACING.LS_SET}\x1e`;
 
-		bitmap.data.forEach((line) => {
-			this.buffer.write(header);
-			this.buffer.writeUInt16LE(line.length / n);
-			this.buffer.write(line);
-			this.buffer.write(_.LF);
-		});
+		this.buffer.write('\x1b\x40');
+		this.buffer.write(setLineSpacing24Dots);
 
-		return this.lineSpace();;
-	};
+		var offset = 0;
 
-	async getRaster(node) {
-		const source = this.getNodeAttr(node, 'source') || '-';
+		while (offset < image.getHeight()) {
+			this.buffer.write(selectBitImageModeCommand);
+			this.buffer.writeUInt16LE(image.getWidth());
+			var imageDataLineIndex = 0;
+			var imageDataLine = new Array();
 
-		if (source && typeof source === 'string') {
-			const image = new Image(source);
-			await image.load();
+			for (var x = 0; x < image.getWidth(); ++x) {
+				for (var k = 0; k < 3; ++k) {
+					var byte = 0;
 
-			this.renderRaster(image, density)
+					for (var b = 0; b < 8; ++b) {
+						var y = ((((offset / 8) | 0) + k) * 8) + b;
+
+						var i = (y * image.getWidth()) + x;
+
+						var v = 0;
+
+						if (i < imageBits.length) {
+							v = imageBits[i];
+						}
+
+						byte |= (v  << (7 - b));
+					}
+
+					imageDataLine[imageDataLineIndex + k] = byte;
+				}
+
+				imageDataLineIndex += 3;
+			}
+
+			offset += 24;
+
+			this.buffer.write(imageDataLine);
+			this.buffer.write('\x0A');
 		}
 
+
+		this.buffer.write(setLineSpacing30Dots);
+		
 		return this;
 	}
 
@@ -392,6 +416,8 @@ class EscPosDriver {
 		var raster = image.toRaster();
 		var header = _.GSV0_FORMAT['GSV0_' + mode.toUpperCase()];
 
+		this.marginLeft(0);
+		this.marginRight(0);
 		this.buffer.write(header);
 		this.buffer.writeUInt16LE(raster.width);
 		this.buffer.writeUInt16LE(raster.height);
@@ -453,7 +479,7 @@ class EscPosDriver {
 					const width = parseInt(this.getNodeAttr(nodeChild, 'width'), 10) || 0;
 					const align = this.getNodeAttr(nodeChild, 'align');
 					let res = await this.renderNode(nodeChild);
-					let nodeText = 'test';
+					let nodeText = res.join(' ');
 					const len = nodeText.length;
 					let cellSize = freeCellSize;
 
@@ -488,7 +514,7 @@ class EscPosDriver {
 
 		value = Number(value) || 0;
 
-		switch(type) {
+		switch (type) {
 			case 'left': return this.marginLeft(value);
 			case 'right': return this.marginRight(value);
 			default: return this.marginBottom(value);
@@ -510,7 +536,7 @@ class EscPosDriver {
 	text(content) {
 		this.write(iconv.encode(content, this.encoding));
 	}
-	
+
 
 	async renderNode(node, code = []) {
 		const nodeName = String(node.nodeName).replace('#', '').trim().toLowerCase();
@@ -573,7 +599,10 @@ class EscPosDriver {
 			case 'img':
 				await this.getImage(node);
 				break;
-			case 'text': 
+			case 'rimg':
+				await this.getRaster(node);
+				break;
+			case 'text':
 				return this.getText(node);
 			default: break;
 		}
@@ -582,7 +611,7 @@ class EscPosDriver {
 
 		if (node.childNodes && node.childNodes.length > 0) {
 			for (let i = 0; i < node.childNodes.length; i++) {
-				await this.renderNode(node.childNodes[i], code);
+				await this.renderNode(node.childNodes[i]);
 			}
 		}
 
@@ -609,9 +638,11 @@ class EscPosDriver {
 				this.buffer.write(_.TEXT_FORMAT.TXT_ITALIC_OFF);
 				break;
 			case 'cut':
+				this.buffer.write(_.LF.repeat(5));
 				this.buffer.write(_.PAPER.PAPER_CUT);
 				break;
 			case 'pcut':
+				this.buffer.write(_.LF.repeat(5));
 				this.buffer.write(_.PAPER.PAPER_CUT);
 				break;
 			case 'br':
@@ -670,6 +701,22 @@ class EscPosDriver {
 
 		return this;
 	};
+
+	getParityBit(str) {
+		var parity = 0, reversedCode = str.split('').reverse().join('');
+
+		for (var counter = 0; counter < reversedCode.length; counter += 1) {
+			parity += parseInt(reversedCode.charAt(counter), 10) * Math.pow(3, ((counter + 1) % 2));
+		}
+
+		return String((10 - (parity % 10)) % 10);
+	};
+
+	codeLength(str) {
+		let buff = Buffer.from((str.length).toString(16), 'hex');
+
+		return buff.toString();
+	}
 
 	async build(data, tpl, templater) {
 		const ttml = this.compileTemplate(data, tpl, templater);

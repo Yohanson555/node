@@ -1,14 +1,8 @@
 //js icon - http://j-mccormick.com/wp-content/uploads/2017/10/icon.png
 
 const imgTemplate = `
-    <br>
-    <br>
-    <br>
-    <br>
-    <center>
-    <img source="D:/REPOS/4.NODE_PROJECTS/esc-pos-driver/big.png">
-    </center>
-    <br><br><br><br><cut>
+<img source="D:/REPOS/4.NODE_PROJECTS/esc-pos-driver/lenna.jpg">
+<cut>
 `;
 
 const smplTemplate = `
@@ -18,6 +12,10 @@ const smplTemplate = `
 <center>
 line 1123123123123
 </center>
+
+<right> right text</right>
+
+<left> left text </left>
 <br>
 line 2
 <br>
@@ -168,10 +166,20 @@ const complexTemplate = `<center>{{company}}</center>
 <br><br><br><br>
 <cut />`;
 
+const codesTemplate = `
+<br />
+<center>
+<bar type="1" data="123456789012" width="4" height="70" hri="1">
+<br />
+</center>
+<br />
+`;
+
 module.exports = {
     billTemplate,
     complexTemplate,
     orderTemplate,
     imgTemplate,
-    smplTemplate
+    smplTemplate,
+    codesTemplate
 }

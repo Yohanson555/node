@@ -1,100 +1,22 @@
 'use strict';
 const _ = require('./Commands');
-const getPixels = require('get-pixels');
-const ImageJs = require('image-js');
 var Jimp = require('jimp');
-const { MutableBuffer } = require('mutable-buffer');
-const { URL } = require('url');
 
 class Image {
-    constructor(source) {
+    constructor(source, isBit = false) {
         this.width = 576;
         this.source = source;
         this.data = [];
+        this.isBit = isBit;
 
         this.size = {
             width: null,
             height: null,
-            colors: null
+            colors: 4
         };
     }
 
     async load() {
-        const self = this;
-        const { source } = this;
-
-        // проверяю, задан ли source. если нет, то ошибка
-
-        if (!source)
-            throw new Error('Image source not specified');
-
-        const image = await ImageJs.Image.load(source);
-
-        console.log("Loaded image: ");
-        console.log(image);
-
-        const grey = image
-            .resize({
-                width: 150
-            })
-            .grey({
-                algorithm: 'lightness'
-            });
-
-        // we create a mask, which is basically a binary image
-        // a mask has as source a grey image and we will decide how to determine
-        // the threshold to define what is white and what is black
-        var mask = grey.mask({
-            algorithm: 'li'
-        });
-
-        //console.log(mask);
-
-        const maskBuffer = mask.toBuffer({
-            format: 'jpg'
-        });
-        const buf = Buffer.from(maskBuffer);
-
-        getPixels(buf, 'image/jpg', (err, pixels) => {
-            //console.log('here is the pixels!');
-            //console.log(pixels);
-
-            if (err) throw new Error(err);
-            this.prepareData(pixels);
-        });
-        /*
-    return new Promise((resolve, reject) => {
-        //изображение может быть задано в двух варианта
-        // 1. Как url изображения в сети
-        // 2. Как base64 строка //TODO
-
-        getPixels(source, (err, pixels) => {
-            this.prepareData(pixels);
-            
-            //console.log('result data');
-            //console.log(this.data);
-
-            resolve();
-        });
-
-        /*
-        ImageJs.Image.load(source).then(image => {
-            const grey = image
-                .resize({ width: 200 })
-                .grey({ algorithm: 'lightness' });
-
-            var mask = grey.mask({ algorithm: 'li' });
-
-            const maskBuffer = mask.toBuffer({ format: 'jpg' });
-            const buf = Buffer.from(maskBuffer);
-
-            
-        });
-        
-    });*/
-    }
-
-    async load2() {
         const { source: src } = this;
 
         if (!src) {
@@ -102,20 +24,23 @@ class Image {
         } else {
             try {
                 return Jimp.read(src).then(image => {
-                    console.log(image);
-                    image.resize(50, 50);
+                    const maxWidth = this.width * 0.9;    
 
-                    console.log(image);
+                    if (image.bitmap.width > maxWidth) {
+                        const ratio = image.bitmap.width / image.bitmap.height;
+
+                        image.resize(maxWidth, maxWidth / ratio);
+                    }
+                    
                     const pixels = this.dithering(1, image.bitmap.data, image.bitmap.width, image.bitmap.height);
+
                     this.prepareData({
                         data: pixels,
                         width: image.bitmap.width,
-                        height: image.bitmap.height,
-                        colors: 4
+                        height: image.bitmap.height
                     });
                 }, err => {
                     if (err.code == "ENOENT") {
-
                         throw new Error("Mentioned file does not exist");
                     } else {
                         throw new Error("Use correct filname, and make sure file used is image");
@@ -128,7 +53,6 @@ class Image {
     }
 
     dithering(errorMultiplier = 1, data, w, h) {
-
         var filter = [
             [0, 0, 0, 7 / 48, 5 / 48],
             [3 / 48, 5 / 48, 7 / 48, 5 / 48, 3 / 48],
@@ -138,7 +62,7 @@ class Image {
         var error = [];
         var x, y, xx, yy, r, g, b;
     
-        for (y = 0; y < h; y++)error.push(new Float32Array(w));
+        for (y = 0; y < h; y++) error.push(new Float32Array(w));
     
         for (y = 0; y < h; y++) {
     
@@ -150,6 +74,7 @@ class Image {
                 b = data[id + 2];
     
                 var avg = (r + g + b) / 3;
+
                 avg -= error[y][x] * errorMultiplier;
     
                 var e = 0;
@@ -175,6 +100,7 @@ class Image {
                 }
             }
         }
+
         return data;
     }
 
@@ -183,23 +109,22 @@ class Image {
             r: pixel[0],
             g: pixel[1],
             b: pixel[2],
-            a: pixel[3],
-            avg: ((pixel[0] + pixel[1] + pixel[2]) / 3) | 0
+            a: pixel[3]
         };
     };
 
     prepareData(pixels) {
         const self = this;
+        var threshold = 127;
 
         if (!pixels) throw new Error('Pixels object not specified');
+
         this.pixels = pixels;
-
-        console.log('this pixels', this.pixels.shape);
-
+        
         this.size = {
+            ...this.size,
             width: this.pixels.width,
             height: this.pixels.height,
-            colors: this.pixels.colors,
         }
 
         for (var i = 0; i < this.pixels.data.length; i += this.size.colors) {
@@ -217,29 +142,23 @@ class Image {
         this.data = this.data.map((pixel, i) => {
             if (pixel.a == 0) return 0;
 
-            var white = pixel.r > 200 && pixel.g > 200 && pixel.b > 200;
+            let luminance = (pixel.r * 0.3 + pixel.g * 0.59 + pixel.b * 0.11) | 0;
 
-            //return pixel.avg;
-
-            return white ? 0 : 1;
+            return Number(luminance < threshold);
         });
     }
 
+    
     toBitmap(density) {
-        density = 8;
         density = density || 24;
 
         var ld, result = [];
         var x, y, b, l, i;
-        var c = density / 8;
+        var c = density / 8; 
 
-        console.log("SIZE:", this.size);
-
-        // n blocks of lines
         var n = Math.ceil(this.size.height / density);
 
-        for (y = 0; y < n; y++) {
-            // line data
+        for (y = 0; y < n; y++) { 
             ld = result[y] = [];
 
             for (x = 0; x < this.size.width; x++) {
@@ -267,11 +186,68 @@ class Image {
         };
     };
 
+    toBitmap2(density) {
+        const { data } = this;
+        const { width, height } = this.size;
+
+        const result = [];
+
+        var bytes = density / 8;
+
+        var offset = 0;
+        var line = 0;
+
+        console.log('toBitmap2 starts');
+
+        while (offset < height) {
+            var imageDataLineIndex = 0;
+            result[line] = new Array(bytes * width);
+            result[line] = result[line].map(() => 0);
+
+            for (let x = 0; x < width; ++x) {
+                for (let k = 0; k < bytes; ++k) {
+                    var slice = 0;
+
+                    for (let b = 0; b < 8; ++b) {
+                        var y = ((((offset / 8) | 0) + k) * 8) + b;
+                        var i = (y * width) + x;
+
+                        var v = false;
+
+                        if (i < data.length) {
+                            v = data[i];
+                        }
+
+                        slice |= ((v ? 1 : 0) << (7 - b));
+                    }
+
+                    result[line][imageDataLineIndex + k] = slice;
+                }
+
+                imageDataLineIndex += bytes;
+            }
+
+            offset += density;
+            line++;
+        }
+
+        console.log('toBitmap2 result');
+        console.log(result);
+
+        return {
+            data: result,
+            density: density
+        }
+    }
+
     toRaster() {
         var result = [];
         var width = this.size.width;
         var height = this.size.height;
         var data = this.data;
+
+        console.log('to raster');
+        console.log(data);
 
         // n blocks of lines
         var n = Math.ceil(width / 8);
@@ -314,6 +290,14 @@ class Image {
 
         return t;
     };
+
+    getWidth() {
+        return this.size.width;
+    }
+
+    getHeight() {
+        return this.size.height;
+    }
 }
 
 module.exports = Image;
