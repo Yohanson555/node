@@ -15,7 +15,7 @@ const port = 9100;
 const printer = new TcpPrinter(host, port);
 
 const driver = new EscPosDriver(parse, {});
-const template = PrintTemplates.imgTemplate;
+const template = PrintTemplates.complexTemplate;
 //const template = PrintTemplates.billTemplate;
 
 const engine = new TicketEngine(driver);

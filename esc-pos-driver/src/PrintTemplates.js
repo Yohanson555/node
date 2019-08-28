@@ -1,7 +1,9 @@
 //js icon - http://j-mccormick.com/wp-content/uploads/2017/10/icon.png
 
 const imgTemplate = `
-<img source="D:/REPOS/4.NODE_PROJECTS/esc-pos-driver/lenna.jpg">
+<center>
+<img source="D:/REPOS/4.NODE_PROJECTS/esc-pos-driver/mac.png" width="400">
+</center>
 <cut>
 `;
 
@@ -97,7 +99,9 @@ const orderTemplate = `<center>
 {{/items_list}}
 <br><br><br><br><br><br><cut>`;
 
-const complexTemplate = `<center>{{company}}</center> 
+const complexTemplate = `
+<center><img source="D:/REPOS/4.NODE_PROJECTS/esc-pos-driver/mac.png" width="200"></center>
+<center>{{company}}</center> 
 <center>{{address}}</center>
 <center>{{site}}</center>
 <center>{{contacts}}</center>
@@ -162,7 +166,9 @@ const complexTemplate = `<center>{{company}}</center>
 <t />
 <t />
 <t />ФП=1421230762<br><br>
-<center><qr data="http://www.dev.untill.com" size="8"/></center>
+<center>
+<qr data="http://www.dev.untill.com" size="8"/>
+</center>
 <br><br><br><br>
 <cut />`;
 

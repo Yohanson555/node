@@ -12,7 +12,7 @@ class EscPosDriver {
 		this.buffer = new MutableBuffer();
 
 		this.options = {
-			width: 800,
+			width: 576,
 			fontType: 'A',
 			fontSize: 1,
 			fontLogo: '',
@@ -23,24 +23,22 @@ class EscPosDriver {
 			barHri: 0
 		};
 
-		this.options = {
-			...this.options,
-			options
-		};
+		if (options && typeof options === 'object') {
+			this.options = { ...this.options, options };
+		}
 
 		this.ticketWidth = this.options.width || 576;
-		this.characterSize = 20;
+		this.characterSize = 14;
 
-		this.fontSizeStack = [];
-
+		this.currentFontSize = this.options.fontSize || 1;
 		this.currentFontType = this.options.fontType || 'A';
-
-		this.styleStack = [];
 		this.currentStyle = 'left';
 
-		this.encoding = 'cp866';
+		this.fontSizeStack = [];
+		this.styleStack = [];
 
 		this.model = null; //qsprinter
+		this.encoding = 'cp866';
 	}
 
 	compileTemplate(data, tpl, templater) {
@@ -57,21 +55,27 @@ class EscPosDriver {
 
 	async render(html) {
 		const nodes = this.parser(this.minifyHTML(html));
-		const code = [];
-
 		let fz = this.options.fontSize || 1;
 
+		this.setDefaults();
 		this.setFontSize(fz, fz);
 		this.setAlignCode(this.currentStyle);
 		this.setFontCode(this.currentFontType);
 
-		await this.renderNode(nodes, code);
+		await this.renderNode(nodes, null);
 
 		return this;
 	}
 
 	flush() {
 		return this.buffer.flush();
+	}
+
+	setDefaults() {
+		this.buffer = new MutableBuffer();
+		this.buffer.write(_.HARDWARE.HW_INIT);
+
+		return this;
 	}
 
 	setAlignCode(a) {
@@ -177,8 +181,6 @@ class EscPosDriver {
 	}
 
 	getBARCode(node) {
-		//var width, height, position, font, includeParity;
-
 		var code = this.getNodeAttr(node, 'data');
 
 		var width = this.getBarCodeWidth(node);
@@ -338,24 +340,53 @@ class EscPosDriver {
 
 	async getImage(node) {
 		const source = this.getNodeAttr(node, 'source') || '-';
-		const density = this.getNodeAttr(node, 'density') || 's8';
+		let width = parseInt(this.getNodeAttr(node, 'width') || this.options.width);
+
+		if (width > this.options.width || width <= 0) {
+			width = parseInt(this.options.width);
+		}
+
+		const density = 'D24';
 
 		if (source && typeof source === 'string') {
-			const image = new Image(source, true);
+			const image = new Image(source, true, width);
 
 			await image.load();
 
-			this.renderImage(image, 'd24')
+			this.renderImage(image, density)
 		}
 
 		return this;
 	}
 
+	renderImage(image, density = null) {
+		var n = ['d8', 's8'].indexOf(density) >= 0 ? 1 : 3;
+		var header = _.BITMAP_FORMAT['BITMAP_' + density.toUpperCase()];
+
+		var bitmap = image.toBitmap(n * 8);
+		var self = this;
+
+		this.lineSpace(0);
+
+		bitmap.data.forEach(async (line) => {
+			self.buffer.write(header);
+			self.buffer.writeUInt16LE(line.length / n);
+			self.buffer.write(line);
+			self.buffer.write(_.EOL);
+		});
+
+		return this.lineSpace();
+	}
+
+	/*
 	renderImage(image, density) {
+		density = 'D8';
 		const imageBits = image.data;
+		const bytes = ['s8', 'd8'].indexOf(density) >= 0 ? 1 : 3;
+		console.log('bytes', bytes);
 
 		// COMMANDS
-		var selectBitImageModeCommand = `${_.BITMAP_FORMAT.BITMAP_D24}`;
+		var selectBitImageModeCommand = `${_.BITMAP_FORMAT[`BITMAP_${density.toUpperCase()}`]}`;
 
 		var setLineSpacing24Dots = `${_.LINE_SPACING.LS_SET}\x18`;
 		var setLineSpacing30Dots = `${_.LINE_SPACING.LS_SET}\x1e`;
@@ -368,11 +399,12 @@ class EscPosDriver {
 		while (offset < image.getHeight()) {
 			this.buffer.write(selectBitImageModeCommand);
 			this.buffer.writeUInt16LE(image.getWidth());
+
 			var imageDataLineIndex = 0;
 			var imageDataLine = new Array();
 
 			for (var x = 0; x < image.getWidth(); ++x) {
-				for (var k = 0; k < 3; ++k) {
+				for (var k = 0; k < bytes; ++k) {
 					var byte = 0;
 
 					for (var b = 0; b < 8; ++b) {
@@ -386,16 +418,16 @@ class EscPosDriver {
 							v = imageBits[i];
 						}
 
-						byte |= (v  << (7 - b));
+						byte |= (v << (7 - b));
 					}
 
 					imageDataLine[imageDataLineIndex + k] = byte;
 				}
 
-				imageDataLineIndex += 3;
+				imageDataLineIndex += bytes;
 			}
 
-			offset += 24;
+			offset += bytes * 8;
 
 			this.buffer.write(imageDataLine);
 			this.buffer.write('\x0A');
@@ -403,7 +435,28 @@ class EscPosDriver {
 
 
 		this.buffer.write(setLineSpacing30Dots);
-		
+
+		return this;
+	}
+	*/
+
+	async getRaster(node) {
+		const source = this.getNodeAttr(node, 'source') || '-';
+		const mode = this.getNodeAttr(node, 'mode') || null;
+
+		let width = parseInt(this.getNodeAttr(node, 'width') || this.options.width);
+
+		if (width > this.options.width || width <= 0) {
+			width = parseInt(this.options.width);
+		}
+		if (source && typeof source === 'string') {
+			const image = new Image(source, false, width);
+
+			await image.load();
+
+			this.renderRaster(image, mode)
+		}
+
 		return this;
 	}
 
@@ -416,8 +469,6 @@ class EscPosDriver {
 		var raster = image.toRaster();
 		var header = _.GSV0_FORMAT['GSV0_' + mode.toUpperCase()];
 
-		this.marginLeft(0);
-		this.marginRight(0);
 		this.buffer.write(header);
 		this.buffer.writeUInt16LE(raster.width);
 		this.buffer.writeUInt16LE(raster.height);
@@ -478,7 +529,8 @@ class EscPosDriver {
 				if (nodeChild.nodeName === 'cell') {
 					const width = parseInt(this.getNodeAttr(nodeChild, 'width'), 10) || 0;
 					const align = this.getNodeAttr(nodeChild, 'align');
-					let res = await this.renderNode(nodeChild);
+					let res = await this.renderNode(nodeChild, []);
+
 					let nodeText = res.join(' ');
 					const len = nodeText.length;
 					let cellSize = freeCellSize;
@@ -504,7 +556,7 @@ class EscPosDriver {
 			}
 		}
 
-		this.buffer.write(`${row}\x0a`);
+		this.text(`${row}\x0a`);
 
 		return this;
 	}
@@ -521,143 +573,137 @@ class EscPosDriver {
 		}
 	}
 
-	getText(node) {
-		const text = node.value;
-
-		if (text) this.text(text);
-	}
-
 	write(data) {
 		this.buffer.write(data);
-
 		return this;
 	}
 
 	text(content) {
 		this.write(iconv.encode(content, this.encoding));
+		return this;
 	}
 
-
-	async renderNode(node, code = []) {
+	async renderNode(node, code = null) {
 		const nodeName = String(node.nodeName).replace('#', '').trim().toLowerCase();
 
 		let w; let h;
 
 		switch (nodeName) {
-			case 'center':
+			case 'center': // set content align
 			case 'left':
 			case 'right':
 				this.setAlignCode(nodeName);
 				break;
-			case 'line':
+			case 'line': // print line of characters
 				this.getLineCode(node);
 				break;
-			case 'row':
-				return this.getRowCode(node);
-			case 'ds':
+			case 'row': // prints table-like row with cells of predefined width
+				await this.getRowCode(node);
+				return code;
+			case 'ds': // set double font size
 				this.setFontSize(2, 2);
 				break;
-			case 'qs':
+			case 'qs': // set tipple font size
 				this.setFontSize(3, 3);
 				break;
-			case 'fs':
+			case 'fs': // set custom font size in range from 1 to 10
 				w = parseInt(this.getNodeAttr(node, 'width') || 1, 10);
 				h = parseInt(this.getNodeAttr(node, 'height') || 1, 10);
 
 				if (w >= 0 && h >= 0) this.setFontSize(w, h);
 				break;
-			case 'b':
-				this.buffer.write(_.TEXT_FORMAT._BOLD_ON);
+			case 'b': // set bold mode on
+				this.buffer.write(_.TEXT_FORMAT.TXT_BOLD_ON);
 				break;
-			case 'u':
+			case 'u': // set underline mode on
 				this.buffer.write(_.TEXT_FORMAT.TXT_UNDERL_ON);
 				break;
-			case 'i':
+			case 'i': // set italic mode on
 				this.buffer.write(_.TEXT_FORMAT.TXT_ITALIC_ON);
 				break;
-			case 't':
+			case 't': //tab
 				this.buffer.write(_.FEED_CONTROL_SEQUENCES.CTL_HT);
 				break;
-			case 'vt':
+			case 'vt': //vertical tab
 				this.buffer.write(_.FEED_CONTROL_SEQUENCES.CTL_VT);
 				break;
-			case 'mb':
+			case 'mb': //matgin bottom
 				this.getMargin(node, 'bottom');
 				break;
-			case 'ml':
+			case 'ml': //margin left
 				this.getMargin(node, 'left');
 				break;
-			case 'mr':
+			case 'mr': //margin right
 				this.getMargin(node, 'right');
 				break;
-			case 'qr':
+			case 'qr': //print qrcode
 				this.getQRCode(node);
 				break;
-			case 'bar':
+			case 'bar': //print barcode
 				this.getBARCode(node);
 				break;
-			case 'img':
+			case 'img': //print bit image
 				await this.getImage(node);
 				break;
-			case 'rimg':
+			case 'rimg': //print raster image
 				await this.getRaster(node);
 				break;
-			case 'text':
-				return this.getText(node);
 			default: break;
 		}
 
-		//console.log(`open tag: ${ nodeName}`);
-
 		if (node.childNodes && node.childNodes.length > 0) {
 			for (let i = 0; i < node.childNodes.length; i++) {
-				await this.renderNode(node.childNodes[i]);
+				await this.renderNode(node.childNodes[i], code);
+			}
+		} else if (node && node.value && node.value !== '') {
+			if (code) {
+				code.push(node.value);
+			} else {
+				this.text(node.value)
 			}
 		}
 
-		//console.log(`close tag: ${ nodeName}`);
-
 		switch (nodeName) {
-			case 'center':
+			case 'center': // pop content align from stack
 			case 'left':
 			case 'right':
 				this.setAlignCode(null);
 				break;
-			case 'ds':
+			case 'ds': // pop font size from stack
 			case 'qs':
 			case 'fs':
 				this.setFontSize();
 				break;
-			case 'b':
+			case 'b': // set bold off
 				this.buffer.write(_.TEXT_FORMAT.TXT_BOLD_OFF);
 				break;
-			case 'u':
+			case 'u': // set underline off
 				this.buffer.write(_.TEXT_FORMAT.TXT_UNDERL_OFF);
 				break;
-			case 'i':
+			case 'i': // set italic off
 				this.buffer.write(_.TEXT_FORMAT.TXT_ITALIC_OFF);
 				break;
-			case 'cut':
+			case 'cut': // cut paper
 				this.buffer.write(_.LF.repeat(5));
 				this.buffer.write(_.PAPER.PAPER_CUT);
 				break;
-			case 'pcut':
+			case 'pcut': // cut paper
 				this.buffer.write(_.LF.repeat(5));
 				this.buffer.write(_.PAPER.PAPER_CUT);
 				break;
-			case 'br':
+			case 'br': // new line and feed paper
 				this.buffer.write(_.EOL);
 				break;
 			default: break;
 		}
 
-		return this;
+		return code;
 	}
 
 	unicodeStringToTypedArray(s) {
 		const escstr = encodeURIComponent(s);
 		const binstr = escstr.replace(/%([0-9A-F]{2})/g,
-			(match, p1) => {
+			(_, p1) => {
 				return String.fromCharCode(`0x${p1}`);
 			});
 

@@ -1,10 +1,9 @@
 'use strict';
-const _ = require('./Commands');
 var Jimp = require('jimp');
 
 class Image {
-    constructor(source, isBit = false) {
-        this.width = 576;
+    constructor(source, isBit = false, width = 576) {
+        this.width = width || 576;
         this.source = source;
         this.data = [];
         this.isBit = isBit;
@@ -31,7 +30,7 @@ class Image {
 
                         image.resize(maxWidth, maxWidth / ratio);
                     }
-                    
+
                     const pixels = this.dithering(1, image.bitmap.data, image.bitmap.width, image.bitmap.height);
 
                     this.prepareData({
@@ -144,7 +143,7 @@ class Image {
 
             let luminance = (pixel.r * 0.3 + pixel.g * 0.59 + pixel.b * 0.11) | 0;
 
-            return Number(luminance < threshold);
+            return Number(!(luminance < threshold));
         });
     }
 
@@ -162,7 +161,6 @@ class Image {
             ld = result[y] = [];
 
             for (x = 0; x < this.size.width; x++) {
-
                 for (b = 0; b < density; b++) {
                     i = x * c + (b >> 3);
 
@@ -186,68 +184,11 @@ class Image {
         };
     };
 
-    toBitmap2(density) {
-        const { data } = this;
-        const { width, height } = this.size;
-
-        const result = [];
-
-        var bytes = density / 8;
-
-        var offset = 0;
-        var line = 0;
-
-        console.log('toBitmap2 starts');
-
-        while (offset < height) {
-            var imageDataLineIndex = 0;
-            result[line] = new Array(bytes * width);
-            result[line] = result[line].map(() => 0);
-
-            for (let x = 0; x < width; ++x) {
-                for (let k = 0; k < bytes; ++k) {
-                    var slice = 0;
-
-                    for (let b = 0; b < 8; ++b) {
-                        var y = ((((offset / 8) | 0) + k) * 8) + b;
-                        var i = (y * width) + x;
-
-                        var v = false;
-
-                        if (i < data.length) {
-                            v = data[i];
-                        }
-
-                        slice |= ((v ? 1 : 0) << (7 - b));
-                    }
-
-                    result[line][imageDataLineIndex + k] = slice;
-                }
-
-                imageDataLineIndex += bytes;
-            }
-
-            offset += density;
-            line++;
-        }
-
-        console.log('toBitmap2 result');
-        console.log(result);
-
-        return {
-            data: result,
-            density: density
-        }
-    }
-
     toRaster() {
         var result = [];
         var width = this.size.width;
         var height = this.size.height;
         var data = this.data;
-
-        console.log('to raster');
-        console.log(data);
 
         // n blocks of lines
         var n = Math.ceil(width / 8);
@@ -278,18 +219,6 @@ class Image {
             height: height
         };
     }
-
-    lineSpace(n) {
-        let t = '';
-
-        if (n === undefined || n === null) {
-            t = _.LINE_SPACING.LS_DEFAULT;
-        } else {
-            t = `${_.LINE_SPACING.LS_SET}${n}`;
-        }
-
-        return t;
-    };
 
     getWidth() {
         return this.size.width;
