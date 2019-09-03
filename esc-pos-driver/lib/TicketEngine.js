@@ -19,12 +19,25 @@ class TicketEngine {
         }
     }
 
-    async run(data, template) {
+    compile(tpl, data, settings) {
+		const renderer = Handlebars.compile(tpl);
+		const res = renderer({ data, settings });
+
+		return res;
+	}
+
+    async run(template = '', data = {}, settings = {}) {
         const { driver } = this;
 
-        await driver.build(data, template, Handlebars);
+        try {
+            const ttml = this.compile(template, data, settings)
 
-        return driver.flush();
+            await driver.render(ttml);
+
+            return driver.flush();
+        } catch (e) {
+            console.error(e);
+        }
     }
 }
 

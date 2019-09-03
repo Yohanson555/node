@@ -2,12 +2,38 @@
 const Handlebars = require('../lib/Handlebars');
 const SafeString = Handlebars.SafeString;
 
-const item_price = () => {
+
+function condition(prop, value, options) {
+    if (this.settings && this.settings[prop] === value) {
+        return options.fn(this);
+    }
+
+    return '';
+};
+
+function attribute(prop, name) {
+    if (this.settings && this.settings[prop])
+        return `${name}="${this.settings[prop]}"`;
+
+    return '';
+};
+
+function value(prop, dflt = null) {
+    if (this.settings && this.settings[prop]) {
+        return this.settings[prop];
+    } else if (dflt && typeof dflt !== 'object') {
+        return dflt;
+    }
+
+    return '';
+};
+
+function item_price() {
     const price = parseFloat(this.price, 10) * parseInt(this.quantity, 10);
     return number_format(price, 2);
 };
 
-const total_sum = (items) => {
+function total_sum(items) {
     let sum = 0;
     if (items && items.length > 0) {
         for (let i = 0; i < items.length; i++) {
@@ -26,25 +52,25 @@ const total_sum = (items) => {
     return new SafeString(`<ds><b><row><cell>TOTAL</cell><cell align='right'>*${number_format(sum, 2)}</cell></row></b></ds><br>`);
 };
 
-const order_date = () => {
+function order_date() {
     if (this.modified > 0) {
         return new SafeString(`<b><row><cell>Order datetime</cell><cell align='right'>${moment(this.modified).format('D.M.Y / hh:mm')}</cell></row></b><br>`);
     }
 };
 
-const bill_date = () => {
+function bill_date() {
     if (this.modified > 0) {
         return new SafeString(`<b><row><cell>Bill datetime</cell><cell align='right'>${moment(this.modified).format('D.M.Y / hh:mm')}</cell></row></b><br>`);
     }
 };
 
-const items_list = (items, opts) => {
+function items_list(items, opts) {
     return items.map((item) => {
         return opts.fn(item);
     }).join('');
 };
 
-const options_list = (options, opts) => {
+function options_list(options, opts) {
     if (options) {
         return Object.values(options).map((item) => {
             return opts.fn(item);
@@ -54,7 +80,7 @@ const options_list = (options, opts) => {
     return '';
 };
 
-const vat_list = (items, options) => {
+function vat_list(items, options) {
     let vats = {};
     let out = '';
 
@@ -82,9 +108,9 @@ const vat_list = (items, options) => {
     }
 
     return '';
-};
+}
 
-const items_by_department = (departments, items, options) => {
+function items_by_department(departments, items, options) {
     var deps = {};
     if (items && items.length > 0) {
         for (let i = 0; i < items.length; i++) {
@@ -107,9 +133,9 @@ const items_by_department = (departments, items, options) => {
             return options.fn(item);
         }).join('') + "<br>";
     }).join('');
-};
+}
 
-const number_format = (number, decimals = 0, dec_point = '.', thousands_sep = ' ') => {	// Format a number with grouped thousands
+function number_format(number, decimals = 0, dec_point = '.', thousands_sep = ' ') {	// Format a number with grouped thousands
     var i, j, kw, kd, km;
 
     if (isNaN(decimals = Math.abs(decimals))) {
@@ -136,9 +162,12 @@ const number_format = (number, decimals = 0, dec_point = '.', thousands_sep = ' 
     kd = (decimals ? dec_point + Math.abs(number - i).toFixed(decimals).replace(/-/, 0).slice(2) : "");
 
     return km + kw + kd;
-};
+}
 
 module.exports = {
+    condition,
+    attribute,
+    value,
     item_price,
     total_sum,
     order_date,

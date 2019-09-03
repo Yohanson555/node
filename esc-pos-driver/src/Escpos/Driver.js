@@ -41,13 +41,6 @@ class EscPosDriver {
 		this.encoding = 'cp866';
 	}
 
-	compileTemplate(data, tpl, templater) {
-		const template = templater.compile(tpl);
-		const res = template(data);
-
-		return res;
-	}
-
 	minifyHTML(html) {
 		const reg = new RegExp(/(\s{2,})|(\n)|(\t)/, 'ig');
 		return html.replace(reg, '');
@@ -113,8 +106,11 @@ class EscPosDriver {
 
 	setFontSize(...attr) {
 		if (attr.length === 2) {
-			const width = attr[0] || 1;
-			const height = attr[1] || 1;
+			let width = parseInt(attr[0] || 1);
+			let height = parseInt(attr[1] || 1);
+
+			if (width > 9 || width < 1) width = 1;
+			if (height > 9 || height < 1) height = 1;
 
 			const widthDec = (width - 1) * 16;
 			const heightDec = (height - 1);
@@ -307,8 +303,8 @@ class EscPosDriver {
 
 		type = parseInt(type || this.options.barType || 0, 10);
 
-		if (type < 0 || type > 8) {
-			type = 0;
+		if (!type || type < 0 || type > 8) {
+			type = 3;
 		}
 
 		switch (type) {
@@ -339,8 +335,10 @@ class EscPosDriver {
 	}
 
 	async getImage(node) {
-		const source = this.getNodeAttr(node, 'source') || '-';
+		const source = this.getNodeAttr(node, 'src') || '-';
 		let width = parseInt(this.getNodeAttr(node, 'width') || this.options.width);
+
+		//console.log('getImage() source', source);
 
 		if (width > this.options.width || width <= 0) {
 			width = parseInt(this.options.width);
@@ -441,7 +439,7 @@ class EscPosDriver {
 	*/
 
 	async getRaster(node) {
-		const source = this.getNodeAttr(node, 'source') || '-';
+		const source = this.getNodeAttr(node, 'src') || '-';
 		const mode = this.getNodeAttr(node, 'mode') || null;
 
 		let width = parseInt(this.getNodeAttr(node, 'width') || this.options.width);
@@ -478,7 +476,9 @@ class EscPosDriver {
 	};
 
 	getLineCode(node) {
-		const symbol = this.getNodeAttr(node, 'symbol') || '-';
+		let symbol = this.getNodeAttr(node, 'symbol') || '-';
+
+		symbol = String(symbol)[0];
 
 		node.innerText = '';
 		node.innerHTML = '';
@@ -603,14 +603,13 @@ class EscPosDriver {
 			case 'ds': // set double font size
 				this.setFontSize(2, 2);
 				break;
-			case 'qs': // set tipple font size
+			case 'qs': // set tripple font size
 				this.setFontSize(3, 3);
 				break;
 			case 'fs': // set custom font size in range from 1 to 10
-				w = parseInt(this.getNodeAttr(node, 'width') || 1, 10);
-				h = parseInt(this.getNodeAttr(node, 'height') || 1, 10);
+				s = parseInt(this.getNodeAttr(node, 'size') || 1, 10);
 
-				if (w >= 0 && h >= 0) this.setFontSize(w, h);
+				if (w >= 0 && h >= 0) this.setFontSize(s, s);
 				break;
 			case 'b': // set bold mode on
 				this.buffer.write(_.TEXT_FORMAT.TXT_BOLD_ON);
@@ -762,12 +761,6 @@ class EscPosDriver {
 		let buff = Buffer.from((str.length).toString(16), 'hex');
 
 		return buff.toString();
-	}
-
-	async build(data, tpl, templater) {
-		const ttml = this.compileTemplate(data, tpl, templater);
-
-		return this.render(ttml, false);
 	}
 }
 

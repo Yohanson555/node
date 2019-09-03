@@ -26,6 +26,16 @@ Handlebars.registerHelper('value', function(prop, dflt = null, options) {
     return '';
 });
 
+Handlebars.registerHelper('test', function(prop, dflt = null, options) {
+    return 'test 1';
+});
+
+Handlebars.registerHelper('test', function(prop, dflt = null, options) {
+    return 'test 2';
+});
+
+Handlebars.unregisterHelper()
+
 const data = {
     header: 'This is header',
     body: 'This is body',
@@ -49,6 +59,8 @@ const template = `
     <body {{{attribute "fontType" "font"}}}>{{data.body}}</body>
 
     <footer align="{{{value "textAlign" "left"}}}">{{data.footer}}</footer>
+
+    {{test}}
 </content>
 `;
 

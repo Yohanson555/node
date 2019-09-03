@@ -8,6 +8,7 @@ const PrintTemplates = require('./src/PrintTemplates');
 const helpers = require('./src/Helpers');
 
 const data = require('./data/data');
+const settings = require('./data/settings');
 
 const host = '192.168.117.211';
 const port = 9100;
@@ -15,13 +16,14 @@ const port = 9100;
 const printer = new TcpPrinter(host, port);
 
 const driver = new EscPosDriver(parse, {});
-const template = PrintTemplates.complexTemplate;
-//const template = PrintTemplates.billTemplate;
+
+const template = PrintTemplates.ticketTemplate;
+
 
 const engine = new TicketEngine(driver);
 engine.setHelpers(helpers);
 
-engine.run(data, template)
+engine.run(template, data, settings)
     .then((ticket) => {
         printer.send(ticket)
     });

@@ -16,13 +16,19 @@ class Image {
     }
 
     async load() {
-        const { source: src } = this;
+        let { source } = this;
 
-        if (!src) {
+        if (!source) {
             throw new Error("Provide image path");
         } else {
             try {
-                return Jimp.read(src).then(image => {
+                if (source.indexOf('base64') > 0 ) {
+                    source = source.replace(/^data:image\/\w+;base64,/, "");
+                    
+                    source = new Buffer(source, 'base64');
+                }
+
+                return Jimp.read(source).then(image => {
                     const maxWidth = this.width * 0.9;    
 
                     if (image.bitmap.width > maxWidth) {
